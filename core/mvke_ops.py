@@ -199,31 +199,31 @@ def process_feature_layers(feature_inputs, features,
             (feature_name, str(layout)))
     return feature_output
 
-def vcg_layer(tag_emb, vc_emb, vce_outputs):
-    # tag_emb: [bz, emb_size] # vc_emb: [vc_num, emb_size] # vce_outputs: [bz, vc_num, emb_size]
-    with tf.variable_scope("vcg", reuse=tf.AUTO_REUSE):
-        vc_num = vc_emb.shape[0]
-        emb_size = vc_emb.shape[1]
+def vkg_layer(tag_emb, vk_emb, vke_outputs):
+    # tag_emb: [bz, emb_size] # vk_emb: [vk_num, emb_size] # vke_outputs: [bz, vk_num, emb_size]
+    with tf.variable_scope("vkg", reuse=tf.AUTO_REUSE):
+        vk_num = vk_emb.shape[0]
+        emb_size = vk_emb.shape[1]
 
-        # vc_emb = tf.layers.dense(vc_emb, emb_size, name="vc_emb_proj", 
+        # vk_emb = tf.layers.dense(vk_emb, emb_size, name="vk_emb_proj", 
         #     kernel_initializer=tf.random_normal_initializer(stddev=0.01))
 
-        vc_emb_trans = tf.transpose(vc_emb, [1,0]) # [emb_size, vc_num]
-        dot_out = tf.matmul(tag_emb, vc_emb_trans) # [bz, vc_num]
-        weights = tf.reshape(tf.nn.softmax(dot_out, 1), [-1, 1, vc_num]) # [bz, 1, vc_num]
+        vk_emb_trans = tf.transpose(vk_emb, [1,0]) # [emb_size, vk_num]
+        dot_out = tf.matmul(tag_emb, vk_emb_trans) # [bz, vk_num]
+        weights = tf.reshape(tf.nn.softmax(dot_out, 1), [-1, 1, vk_num]) # [bz, 1, vk_num]
 
-        layer_output = tf.reshape(tf.matmul(weights, vce_outputs), [-1, emb_size]) # [bz, emb_size]
+        layer_output = tf.reshape(tf.matmul(weights, vke_outputs), [-1, emb_size]) # [bz, emb_size]
 
-    return layer_output, tf.reshape(weights, [-1, vc_num]) # [bz, emb_size]
+    return layer_output, tf.reshape(weights, [-1, vk_num]) # [bz, emb_size]
 
-def mvke_bottom_layer(vc_emb, shared_field_embs):
-    # vc_emb: [vc_num, emb_size] # shared_field_embs: [bz, feature_num, emb_size] 
+def mvke_bottom_layer(vk_emb, shared_field_embs):
+    # vk_emb: [vk_num, emb_size] # shared_field_embs: [bz, feature_num, emb_size] 
     with tf.variable_scope("mvke_bottom", reuse=tf.AUTO_REUSE):
-        vc_num = vc_emb.shape[0]
-        emb_size = vc_emb.shape[1]
+        vk_num = vk_emb.shape[0]
+        emb_size = vk_emb.shape[1]
         feature_num = shared_field_embs.shape[1]
 
-        query = tf.layers.dense(vc_emb, emb_size, name="query_proj", 
+        query = tf.layers.dense(vk_emb, emb_size, name="query_proj", 
             kernel_initializer=tf.random_normal_initializer(stddev=0.01))
 
         reshaped_shared_field_embs = tf.reshape(shared_field_embs, [-1, emb_size])
@@ -234,22 +234,22 @@ def mvke_bottom_layer(vc_emb, shared_field_embs):
         value = tf.layers.dense(reshaped_shared_field_embs, emb_size, name="value_proj", 
             kernel_initializer=tf.random_normal_initializer(stddev=0.01)) 
 
-        query_trans = tf.transpose(query, [1,0]) # [emb_size, vc_num]
-        dot_out = tf.reshape(tf.matmul(key, query_trans) / math.sqrt(1.0*int(emb_size)), [-1, feature_num, vc_num]) # [bz, feature_num, vc_num]
-        weights = tf.reshape(tf.nn.softmax(dot_out, 1), [-1, feature_num, vc_num, 1]) # [bz, feature_num, vc_num, 1]
+        query_trans = tf.transpose(query, [1,0]) # [emb_size, vk_num]
+        dot_out = tf.reshape(tf.matmul(key, query_trans) / math.sqrt(1.0*int(emb_size)), [-1, feature_num, vk_num]) # [bz, feature_num, vk_num]
+        weights = tf.reshape(tf.nn.softmax(dot_out, 1), [-1, feature_num, vk_num, 1]) # [bz, feature_num, vk_num, 1]
 
         value = tf.reshape(value, [-1, feature_num, 1, emb_size]) # [-1, feature_num, 1, emb_size]
-        value_expand = tf.tile(value, [1, 1, vc_num, 1]) # [bz, feature_num, vc_num, emb_size]
+        value_expand = tf.tile(value, [1, 1, vk_num, 1]) # [bz, feature_num, vk_num, emb_size]
         layer_output = weights * value_expand
 
         layer_output = tf.contrib.layers.layer_norm(
-            layer_output + tf.tile(tf.reshape(shared_field_embs, [-1, feature_num, 1, emb_size]), [1, 1, vc_num, 1]), 
+            layer_output + tf.tile(tf.reshape(shared_field_embs, [-1, feature_num, 1, emb_size]), [1, 1, vk_num, 1]), 
             begin_norm_axis=-1, begin_params_axis=-1)
 
-    return layer_output # [bz, feature_num, vc_num, emb_size]
+    return layer_output # [bz, feature_num, vk_num, emb_size]
 
 def _build_mvke_layers(fields_config, field_name, features, feature_output, is_training, 
-    tag_key, shared_model=False, vce_num=10, obj_config={'pctr': [0,5], 'pcvr': [2,9]}):
+    tag_key, shared_model=False, vke_num=10, obj_config={'pctr': [0,5], 'pcvr': [2,9]}):
 
     if not field_name in fields_config:
         tf_logging.fatal("field_name: %s can not find config" % field_name)
@@ -260,52 +260,52 @@ def _build_mvke_layers(fields_config, field_name, features, feature_output, is_t
     feature_num = layout[1]
     emb_size = layout[2]
     with tf.variable_scope("mvke_"+field_name, reuse=tf.AUTO_REUSE):
-        # [vce_num, emb_size]
-        vc = _variable_on_cpu(
-            "virtual_cluster", [vce_num , emb_size],
+        # [vke_num, emb_size]
+        vk = _variable_on_cpu(
+            "virtual_cluster", [vke_num , emb_size],
             tf.random_normal_initializer(stddev=0.01))
-        mvke_bottom_out = mvke_bottom_layer(vc, layer_output) # [bz, feature_num, vc_num, emb_size]
+        mvke_bottom_out = mvke_bottom_layer(vk, layer_output) # [bz, feature_num, vk_num, emb_size]
 
         # share the same model in mvke
         if shared_model:
-            layer_output = tf.reshape(tf.transpose(mvke_bottom_out, [0, 2, 1, 3]), [-1, feature_num, emb_size]) # [bz*vce_num, feature_num, emb_size]
+            layer_output = tf.reshape(tf.transpose(mvke_bottom_out, [0, 2, 1, 3]), [-1, feature_num, emb_size]) # [bz*vke_num, feature_num, emb_size]
             for i, layer in enumerate(field_config.field_layer.layer):
                 with tf.variable_scope("field_layer_%d" % i):
                     layout, layer_output = process_impl_layer(
                         layer_output, layout, field_name, layer,
-                        is_training, features) # [bz*vce_num, emb_size]
+                        is_training, features) # [bz*vke_num, emb_size]
         else:
             layer_output_all = []
-            for vce_idx in range(vce_num):
-                layer_output = tf.reshape(tf.gather(mvke_bottom_out, vce_idx, axis=2), [-1, feature_num, emb_size]) # [bz, feature_num, emb_size]
+            for vke_idx in range(vke_num):
+                layer_output = tf.reshape(tf.gather(mvke_bottom_out, vke_idx, axis=2), [-1, feature_num, emb_size]) # [bz, feature_num, emb_size]
                 in_layout = layout
                 for i, layer in enumerate(field_config.field_layer.layer):
-                    with tf.variable_scope("vce_{}_field_layer_{}".format(vce_idx, i)):
+                    with tf.variable_scope("vke_{}_field_layer_{}".format(vke_idx, i)):
                         in_layout, layer_output = process_impl_layer(
                             layer_output, in_layout, field_name, layer,
                             is_training, features)
                 layer_output_all.append(tf.expand_dims(layer_output, 1))
-            layer_output = tf.stack(layer_output_all, 1) # [bz, vce_num, emb_size]
+            layer_output = tf.stack(layer_output_all, 1) # [bz, vke_num, emb_size]
 
-        layer_output = tf.reshape(layer_output, [-1, vce_num, emb_size])
+        layer_output = tf.reshape(layer_output, [-1, vke_num, emb_size])
         final_layer = {}
-        vce_weights = {}
-        vce_outputs = {}
+        vke_weights = {}
+        vke_outputs = {}
         for key in tag_key:
             tag_emb = tag_key[key]
             select_begin, select_end = obj_config[key]
             select_index = [i for i in range(select_begin, select_end+1)]
-            select_vc_emb = tf.gather(vc, select_index, axis=0) # to-check
+            select_vk_emb = tf.gather(vk, select_index, axis=0) # to-check
             select_layer_output = tf.gather(layer_output, select_index, axis=1) # to-check
-            layer_out, vce_weight = vcg_layer(tag_emb, select_vc_emb, select_layer_output) # [bz, emb_size]
+            layer_out, vke_weight = vkg_layer(tag_emb, select_vk_emb, select_layer_output) # [bz, emb_size]
 
             final_layer[key] = layer_out
-            vce_weights[key] = vce_weight
-            vce_outputs[key] = tf.reshape(select_layer_output, [-1, (select_end-select_begin+1)*emb_size])
+            vke_weights[key] = vke_weight
+            vke_outputs[key] = tf.reshape(select_layer_output, [-1, (select_end-select_begin+1)*emb_size])
 
-    return final_layer, vce_weights, vce_outputs
+    return final_layer, vke_weights, vke_outputs
 
-def _build_mvke(impl_config, features, field_name, is_training, tag_key, shared_model, vce_num, obj_config):
+def _build_mvke(impl_config, features, field_name, is_training, tag_key, shared_model, vke_num, obj_config):
     features_config, fields_config, _ = impl_config
     feature_inputs, local_feature_config = process_feature_input(
         features_config, features, field_name)
@@ -313,11 +313,11 @@ def _build_mvke(impl_config, features, field_name, is_training, tag_key, shared_
         feature_inputs, features, local_feature_config, is_training)
     layer_output = _build_mvke_layers(
         fields_config, field_name, features, feature_output, 
-        is_training, tag_key, shared_model, vce_num, obj_config)
+        is_training, tag_key, shared_model, vke_num, obj_config)
 
     return layer_output
 
-def build_mvke(impl_config, features, field_name, is_training, tag_key, shared_model, vce_num, obj_config):
+def build_mvke(impl_config, features, field_name, is_training, tag_key, shared_model, vke_num, obj_config):
     """Build mvke for user"""
     feature_config, _, _ = impl_config
     field_features = {}
@@ -326,7 +326,7 @@ def build_mvke(impl_config, features, field_name, is_training, tag_key, shared_m
             field_features[feature_name] = features[feature_name]
 
     return _build_mvke(impl_config, field_features, field_name, 
-        is_training, tag_key, shared_model, vce_num, obj_config)
+        is_training, tag_key, shared_model, vke_num, obj_config)
 
 
 def mmoe_gate_layer(inputs, expert_num, expert_outputs, task_name):
@@ -357,16 +357,16 @@ def _build_mmoe_layers(fields_config, field_name, features, feature_output, is_t
     with tf.variable_scope("mmoe_"+field_name, reuse=tf.AUTO_REUSE):
         # experts
         expert_output_all = []
-        for vce_idx in range(expert_num):
+        for vke_idx in range(expert_num):
             expert_output = layer_output
             expert_layout = layout
             for i, layer in enumerate(field_config.field_layer.layer):
-                with tf.variable_scope("expert_{}_field_layer_{}".format(vce_idx, i)):
+                with tf.variable_scope("expert_{}_field_layer_{}".format(vke_idx, i)):
                     expert_layout, expert_output = process_impl_layer(
                         expert_output, expert_layout, field_name, layer,
                         is_training, features)
             expert_output_all.append(expert_output) # [bz, emb_size]
-        expert_output = tf.stack(expert_output_all, 1) # [bz, vce_num, emb_size]
+        expert_output = tf.stack(expert_output_all, 1) # [bz, vke_num, emb_size]
 
         # task gates
         final_layer = {}

@@ -80,7 +80,7 @@ def user_MVKE_and_tag_HS(impl_config, features, is_training):
     user_outs, tag_vke_weights, user_vke_outputs = mvke_ops.build_mvke(impl_config, features, field_name0, is_training, 
                                                                        tag_key=tag_outs,
                                                                        shared_model=False, #FLAGS.shared_model, 
-                                                                       vce_num=5, 
+                                                                       vke_num=5, 
                                                                        obj_config={'pctr':[0,2], 'pcvr':[1,4]})
 
     losses = {}
