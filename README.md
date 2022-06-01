@@ -1,5 +1,5 @@
 # MVKE
-Implementation for the paper "Mixture of Virtual-Kernel Experts for Multi-Objective UserProfile Modeling", which has been submitted to WSDM'2022.
+Implementation for the paper "Mixture of Virtual-Kernel Experts for Multi-Objective UserProfile Modeling", which has been accepted by SIGKDD'2022.
 
 This repo releases part of core codes for the implementation of MVKE and baselines. The loss definitions are set in "model_graph_type.py" and the detailed model architecture is defined in "mvke_ops.py". More codes is highly related to a complex industrial learning architecture, thus it is temporarily inconvenient to open source.
 
